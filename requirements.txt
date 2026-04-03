@@ -1,0 +1,36 @@
+# Core dependencies
+numpy>=1.21.0
+opencv-python>=4.5.0
+opencv-contrib-python>=4.5.0
+
+# Deep Learning
+torch>=1.10.0
+torchvision>=0.11.0
+tensorflow>=2.8.0
+keras>=2.8.0
+
+# MediaPipe for gesture and pose recognition
+mediapipe>=0.8.0
+
+# Data Processing
+pandas>=1.3.0
+scikit-learn>=0.24.0
+scipy>=1.7.0
+
+# Utilities
+Pillow>=8.0.0
+matplotlib>=3.4.0
+tqdm>=4.62.0
+
+# Development & Testing
+python-dotenv>=0.19.0
+pytest>=6.2.0
+pytest-cov>=2.12.0
+pytest-xdist>=2.3.0
+black>=21.0
+flake8>=3.9.0
+mypy>=0.900
+
+# Optional: GPU support (install if using NVIDIA GPU)
+# torch-cuda support through: torch with cuda version
+# tensorflow-gpu>=2.8.0  # Uncomment for GPU support

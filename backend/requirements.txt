@@ -1,0 +1,13 @@
+# Backend Requirements for FastAPI
+
+# Web Framework
+fastapi>=0.95.0
+uvicorn>=0.21.0
+pydantic>=1.10.0
+
+# Data Processing
+numpy>=1.21.0
+pillow>=8.0.0
+
+# Optional: for async support
+python-multipart>=0.0.5
