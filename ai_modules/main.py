@@ -6,7 +6,7 @@ from rPPG_module.rPPG import rPPG_agent
 
 
 def main():
-    # rppg performance variables
+    # rppg framing variables
     target_fps = 25
     frame_interval = 1.0 / target_fps
     last_sent_time = 0
@@ -29,7 +29,7 @@ def main():
         # time-based sampling for rppg model
         current_time = time.perf_counter()
 
-        if (last_sent_time - current_time) >= frame_interval:
+        if (current_time - last_sent_time) >= frame_interval:
             agent_rppg.enqueue_frame(frame)
             last_sent_time = current_time
 
@@ -48,6 +48,5 @@ def main():
 
     cap.release()
     cv2.destroyAllWindows()
-
 if __name__ == "__main__":
     main()
