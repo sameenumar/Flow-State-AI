@@ -1,17 +1,23 @@
-"""
-Remote Photoplethysmography (rPPG) module.
-Estimates heart rate and blood oxygen levels from facial video.
-"""
+import queue
+import threading
 
-def extract_rppg(face_region):
-    """
-    Extract rPPG signal from face region.
-    
-    Args:
-        face_region: Cropped face image
-        
-    Returns:
-        rPPG signal and derived metrics (heart rate, SpO2, etc.)
-    """
-    # TODO: Implement rPPG extraction
-    pass
+class rPPG_agent(threading.Thread):
+    def __init__(self):
+        super().__init__()
+        self.frame_queue = queue.Queue(maxsize=1)
+        self.daemon = True
+        self.latest_result = None
+
+    def enqueue_frame(self, frame):
+        if self.frame_queue.full():
+            try:
+                self.frame_queue.get_nowait()
+            except queue.Empty:
+                pass
+        self.frame_queue.put(frame)
+
+    def run(self):
+        while True:
+            frame = self.frame_queue.get()
+
+            # rPPG implementation logic
