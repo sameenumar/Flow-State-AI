@@ -135,3 +135,6 @@ Thumbs.db
 
 # Project specific
 data/
+
+# models
+*.task
