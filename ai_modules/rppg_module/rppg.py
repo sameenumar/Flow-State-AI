@@ -212,13 +212,13 @@ def _compute_stress_index(bpm, sdnn_ms):
 
 
 class rPPG_agent(threading.Thread):
-    def __init__(self):
+    def __init__(self, fps=30):
         super().__init__()
         self.daemon = True
         self.frame_queue = queue.Queue(maxsize=1)
-        self.signal_window = deque(maxlen=125)
-        self.window_frames = 125
-        self.fps = 25
+        self.window_frames = fps * 5
+        self.signal_window = deque(maxlen=self.window_frames)
+        self.fps = fps
         self.latest_result = None
         self.running = False
 
@@ -244,6 +244,8 @@ class rPPG_agent(threading.Thread):
         while self.running:
             try:
                 bgr_frame, landmarks_list = self.frame_queue.get(timeout=0.1)
+                if bgr_frame is None:
+                    break
 
                 # Extract the per-frame [R, G, B] mean across 3 ROI boxes
                 roi_signal = extract_roi_signals(bgr_frame, landmarks_list[0])
@@ -306,3 +308,7 @@ class rPPG_agent(threading.Thread):
  
     def stop(self):
         self.running = False
+        try:
+            self.frame_queue.put_nowait(None)
+        except queue.Full:
+            pass

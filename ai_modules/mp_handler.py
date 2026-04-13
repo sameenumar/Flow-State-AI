@@ -102,6 +102,8 @@ class MediaPipeThread(threading.Thread):
         while self.running:
             try:
                 bgr_frame, ts_ms = self.input_queue.get(timeout=0.1)
+                if bgr_frame is None:  # sentinel
+                    break
 
                 # BGR -> RGB conversion
                 rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
@@ -121,6 +123,11 @@ class MediaPipeThread(threading.Thread):
             except queue.Empty:
                 continue
 
-    def stop(self):
-        self.running = False
-        self.mp_agent.close()
+def stop(self):
+    self.running = False
+    try:
+        self.input_queue.put_nowait(None)
+    except queue.Full:
+        pass
+    self.join(timeout=1.0)
+    self.mp_agent.close()
