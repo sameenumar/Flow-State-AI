@@ -1,52 +1,74 @@
-"""Response models for API endpoints."""
+"""
+backend/app/models/response_model.py
+
+Pydantic models that match the actual payload schema produced by
+ai_modules/main.py. These are used for the /latest REST endpoint
+and for internal type validation.
+
+The WebSocket endpoints don't validate with Pydantic — they relay
+raw JSON directly for minimum latency. These models exist for
+documentation, the REST fallback endpoint, and future test coverage.
+"""
 
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional
 
 
-class FaceDetectionResponse(BaseModel):
-    """Response model for face detection."""
-    success: bool
-    faces_detected: int
-    face_regions: Optional[list] = None
-    confidence: Optional[float] = None
+class FusionBlock(BaseModel):
+    cognitive_state:   str   = "unknown"
+    emotional_state:   str   = "unknown"
+    stress_level:      str   = "unknown"
+    engagement:        str   = "unknown"
+    focus_score:       float = 0.0
+    fusion_confidence: float = 0.0
 
 
-class GestureRecognitionResponse(BaseModel):
-    """Response model for gesture recognition."""
-    success: bool
-    gesture: Optional[str] = None
-    confidence: Optional[float] = None
+class DecisionBlock(BaseModel):
+    message:    str  = "Initializing..."
+    suggestion: str  = ""
+    priority:   str  = "passive"
+    alert:      bool = False
 
 
-class RPPGAnalysisResponse(BaseModel):
-    """Response model for rPPG analysis."""
-    success: bool
-    heart_rate: Optional[float] = None
-    spo2: Optional[float] = None
-    confidence: Optional[float] = None
+class VitalsBlock(BaseModel):
+    bpm:            Optional[float] = None
+    hrv_sdnn:       Optional[float] = None
+    stress_index:   Optional[float] = None
+    signal_quality: str             = "warming_up"
+    confidence:     float           = 0.0
+    pulse_sample:   float           = 0.0   # single waveform point for live chart
 
 
-class FlowStateResponse(BaseModel):
-    """Response model for flow state analysis."""
-    success: bool
-    flow_state: Optional[str] = None
-    confidence: Optional[float] = None
-    face_data: Optional[Dict[str, Any]] = None
-    gesture_data: Optional[Dict[str, Any]] = None
-    rppg_data: Optional[Dict[str, Any]] = None
+class FaceBlock(BaseModel):
+    joy:               float = 0.0
+    frustration:       float = 0.0
+    fatigue:           float = 0.0
+    blink_rate:        int   = 0
+    eye_closure_index: float = 0.0
+    valence:           float = 0.0
+    arousal:           float = 0.5
+    face_detected:     bool  = False
 
 
-class AnalysisRequest(BaseModel):
-    """Request model for analysis."""
-    image_data: str  # Base64 encoded image
-    analyze_face: bool = True
-    analyze_gesture: bool = True
-    analyze_rppg: bool = True
+class GestureBlock(BaseModel):
+    fidget_level:       float           = 0.0
+    face_touching:      bool            = False
+    typing_cadence:     Optional[str]   = None
+    posture_slump:      float           = 0.0
+    prob_fidgeting:     float           = 0.0
+    prob_typing:        float           = 0.0
+    prob_face_touching: float           = 0.0
+    hands_detected:     bool            = False
 
 
-class ErrorResponse(BaseModel):
-    """Error response model."""
-    success: bool = False
-    error: str
-    detail: Optional[str] = None
+class AnalysisPayload(BaseModel):
+    """
+    Complete payload structure pushed from ai_modules/main.py
+    to the backend every second.
+    """
+    timestamp: float
+    fusion:    FusionBlock
+    decision:  DecisionBlock
+    vitals:    VitalsBlock
+    face:      FaceBlock
+    gesture:   GestureBlock
