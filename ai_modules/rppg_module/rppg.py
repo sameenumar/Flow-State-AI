@@ -212,7 +212,7 @@ def _compute_stress_index(bpm, sdnn_ms):
 
 
 class rPPG_agent(threading.Thread):
-    def __init__(self, fps=30):
+    def __init__(self, fps):
         super().__init__()
         self.daemon = True
         self.frame_queue = queue.Queue(maxsize=1)
@@ -221,6 +221,7 @@ class rPPG_agent(threading.Thread):
         self.fps = fps
         self.latest_result = None
         self.running = False
+        self.latest_pulse_sample = 0.0
 
         # # performance testing
         # self.frame_count = 0
@@ -282,6 +283,7 @@ class rPPG_agent(threading.Thread):
                 pulse_pos_norm = _normalize_signal(pulse_pos)
                 pulse_chrom_norm = _normalize_signal(pulse_chrom)
                 pulse_combined = 0.5 * pulse_pos_norm + 0.5 * pulse_chrom_norm
+                self.latest_pulse_sample = float(pulse_combined[-1])
  
                 # --- Final BPM from the combined signal ---
                 bpm_combined, snr_combined = _compute_bpm(pulse_combined, self.fps)
@@ -294,13 +296,22 @@ class rPPG_agent(threading.Thread):
  
                 # --- Stress index ---
                 stress_index = _compute_stress_index(bpm_combined, sdnn_ms)
- 
+
+                # signal quality
+                if confidence > 0.7: 
+                    signal_quality = "good"
+                elif confidence > 0.4:
+                    signal_quality = "fair"
+                else:
+                    signal_quality = "poor"
+
                 # --- Write structured result (atomic dict assignment) ---
                 self.latest_result = {
                     "bpm":            round(bpm_combined, 1),
                     "hrv_sdnn":       round(sdnn_ms, 1) if sdnn_ms is not None else None,
                     "confidence":     round(confidence, 3),
                     "stress_index":   round(stress_index, 3),
+                    "signal_quality": signal_quality
                 }
  
             except queue.Empty:

@@ -27,10 +27,9 @@ class gesture_agent(threading.Thread):
     Call start() after init. Read latest_result for the 1 Hz output packet.
     """
 
-    def __init__(self, smoothing_window: int = 5, output_frequency: float = 1.0):
+    def __init__(self, output_frequency: float = 1.0):
         """
         Args:
-            smoothing_window: Unused legacy param (kept for API compatibility)
             output_frequency: How often to emit a packet in Hz. Default = 1 per second.
         """
         super().__init__()
@@ -44,8 +43,6 @@ class gesture_agent(threading.Thread):
         self.output_frequency = output_frequency
         self.output_interval  = 1.0 / output_frequency
         self.last_output_time = 0.0
-
-        self.smoothing_window = smoothing_window
 
         # ── Frame accumulation (rolling 1-second window at ~30fps) ──
         self.frames_buffer      = deque(maxlen=30)

@@ -81,7 +81,7 @@ class MediaPipeHandler:
         self.hand_landmarker.close()
 
 class MediaPipeThread(threading.Thread):
-    def __init__(self, output_queue, face_model_path="./models/face_landmarker.task", hand_model_path="./models/hand_landmarker.task"):
+    def __init__(self, output_queue, face_model_path=None, hand_model_path=None):
         super().__init__()
         self.daemon = True
         self.mp_agent = MediaPipeHandler(face_model_path, hand_model_path)

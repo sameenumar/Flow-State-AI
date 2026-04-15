@@ -1,24 +1,30 @@
-"""FastAPI application initialization."""
+"""
+backend/app/main.py
 
-from fastapi import FastAPI
+FastAPI application with:
+  - REST health endpoint
+  - WebSocket endpoint for receiving data from ai_modules/main.py
+  - WebSocket endpoint for streaming data to React frontend
+"""
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+import json
+import time
+
 from backend.app.config.settings import (
-    APP_NAME,
-    APP_VERSION,
-    CORS_ORIGINS,
-    CORS_ALLOW_CREDENTIALS,
-    CORS_ALLOW_METHODS,
-    CORS_ALLOW_HEADERS
+    APP_NAME, APP_VERSION,
+    CORS_ORIGINS, CORS_ALLOW_CREDENTIALS,
+    CORS_ALLOW_METHODS, CORS_ALLOW_HEADERS,
 )
-from backend.app.routes import analyze
 
 app = FastAPI(
     title=APP_NAME,
     version=APP_VERSION,
-    description="AI-powered flow state detection system"
+    description="Flow State AI — real-time analysis backend",
 )
 
-# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -27,173 +33,165 @@ app.add_middleware(
     allow_headers=CORS_ALLOW_HEADERS,
 )
 
-# Include routes
-app.include_router(analyze.router)
 
+# ── Connection managers ────────────────────────────────────────────────────────
+
+class AIConnectionManager:
+    """
+    Manages the single WebSocket connection from ai_modules/main.py.
+    The AI module is always one process — only one connection expected.
+    Stores the latest payload so frontend clients that connect later
+    immediately receive current state rather than waiting up to 1 second.
+    """
+    def __init__(self):
+        self.connection: WebSocket = None
+        self.latest_payload: dict  = None
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.connection = ws
+        print("[Backend] AI module connected")
+
+    def disconnect(self):
+        self.connection = None
+        print("[Backend] AI module disconnected")
+
+
+class FrontendConnectionManager:
+    """
+    Manages all WebSocket connections from React frontend clients.
+    Broadcasts every payload received from the AI module to all
+    connected frontend clients simultaneously.
+    """
+    def __init__(self):
+        self.active: list[WebSocket] = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active.append(ws)
+        print(f"[Backend] Frontend client connected — total: {len(self.active)}")
+
+    def disconnect(self, ws: WebSocket):
+        if ws in self.active:
+            self.active.remove(ws)
+        print(f"[Backend] Frontend client disconnected — remaining: {len(self.active)}")
+
+    async def broadcast(self, payload: dict):
+        """Send payload to all connected frontend clients."""
+        if not self.active:
+            return
+        message = json.dumps(payload)
+        disconnected = []
+        for ws in self.active:
+            try:
+                await ws.send_text(message)
+            except Exception:
+                disconnected.append(ws)
+        for ws in disconnected:
+            self.disconnect(ws)
+
+
+ai_manager       = AIConnectionManager()
+frontend_manager = FrontendConnectionManager()
+
+
+# ── WebSocket: AI module → backend ────────────────────────────────────────────
+
+@app.websocket("/ws/ai")
+async def ai_websocket(ws: WebSocket):
+    """
+    Receives structured JSON payloads from ai_modules/main.py.
+    Validates the payload minimally, stores it, and broadcasts to frontend.
+
+    Expected payload shape (sent every 1 second from ai_modules/main.py):
+    {
+      "timestamp": float,
+      "fusion":   { cognitive_state, emotional_state, stress_level, ... },
+      "decision": { message, suggestion, priority, alert },
+      "vitals":   { bpm, hrv_sdnn, stress_index, signal_quality, pulse_sample },
+      "face":     { joy, frustration, fatigue, blink_rate, ... },
+      "gesture":  { fidget_level, typing_cadence, prob_typing, ... }
+    }
+    """
+    await ai_manager.connect(ws)
+    try:
+        while True:
+            raw = await ws.receive_text()
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                print("[Backend] Received malformed JSON from AI module — skipping")
+                continue
+
+            # Store latest for clients that connect mid-session
+            ai_manager.latest_payload = payload
+
+            # Broadcast to all frontend clients
+            await frontend_manager.broadcast(payload)
+
+    except WebSocketDisconnect:
+        ai_manager.disconnect()
+
+
+# ── WebSocket: backend → frontend ────────────────────────────────────────────
+
+@app.websocket("/ws/frontend")
+async def frontend_websocket(ws: WebSocket):
+    """
+    Streams analysis results to React frontend clients.
+    On connect, immediately sends the latest payload so the UI
+    doesn't show empty state while waiting for the next push.
+    """
+    await frontend_manager.connect(ws)
+
+    # Send most recent data immediately on connect
+    if ai_manager.latest_payload:
+        try:
+            await ws.send_text(json.dumps(ai_manager.latest_payload))
+        except Exception:
+            pass
+
+    try:
+        # Keep connection alive — frontend can send pings if needed
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        frontend_manager.disconnect(ws)
+
+
+# ── REST endpoints ────────────────────────────────────────────────────────────
 
 @app.get("/")
 async def root():
-    """Root endpoint."""
+    return {"name": APP_NAME, "version": APP_VERSION, "status": "running"}
+
+
+@app.get("/health")
+async def health():
+    """
+    Health check. Also reports whether the AI module is currently connected
+    and when the last payload was received.
+    """
     return {
-        "name": APP_NAME,
-        "version": APP_VERSION,
-        "status": "running"
+        "status":           "healthy",
+        "ai_connected":     ai_manager.connection is not None,
+        "frontend_clients": len(frontend_manager.active),
+        "last_update":      (ai_manager.latest_payload or {}).get("timestamp"),
     }
-│   │   │   └── analyze.py       # Analysis endpoints│   │   ├── services/│   │   │   └── processor.py     # Business logic│   │   ├── models/│   │   │   └── response_model.py # Pydantic schemas│   │   ├── config/│   │   │   └── settings.py      # Configuration│   │   └── __init__.py│   ├── main.py                  # Entry point│   ├── requirements.txt│   ├── .gitignore│   └── __init__.py│├── ai_modules/                  # Core AI Logic│   ├── face_module/│   │   ├── __init__.py│   │   └── face_detection.py│   ├── gesture_module/│   │   ├── __init__.py│   │   └── gesture.py│   ├── rppg_module/│   │   ├── __init__.py│   │   └── rppg.py│   ├── fusion/│   │   ├── __init__.py│   │   └── decision.py│   └── __init__.py│├── tests/│   ├── test_face.py│   ├── test_gesture.py│   ├── test_rppg.py│   ├── conftest.py│   └── __init__.py│├── data/                        # Datasets (optional)├── docs/│   └── report.pdf│├── .gitignore├── README.md├── requirements.txt└── pytest.ini```## Installation### Prerequisites- Python 3.9+- Node.js 16+- npm or yarn### Backend Setup1. **Install Python dependencies**   ```bash   pip install -r requirements.txt   pip install -r backend/requirements.txt   ```2. **Install AI module dependencies**   ```bash   pip install opencv-python tensorflow torch mediapipe numpy scipy scikit-learn   ```### Frontend Setup1. **Navigate to frontend directory**   ```bash   cd frontend   ```2. **Install dependencies**   ```bash   npm install   ```3. **Create .env file**   ```bash   echo "REACT_APP_API_URL=http://localhost:8000" > .env   ```## Running the Application### Option 1: Run Separately (Development)**Terminal 1 - Backend:**
-```bash
-python backend/main.py
-```
-Backend runs on: `http://localhost:8000`
 
-**Terminal 2 - Frontend:**
-```bash
-cd frontend
-npm start
-```
-Frontend runs on: `http://localhost:3000`
-
-### Option 2: Run with Docker Compose
-
-```bash
-docker-compose up
-```
-
-## API Endpoints
-
-### Health Check
-```
-GET /health
-```
-
-### Analyze Flow State
-```
-POST /api/analyze
-Content-Type: application/json
-
-{
-  "image_data": "base64_encoded_image",
-  "analyze_face": true,
-  "analyze_gesture": true,
-  "analyze_rppg": true
-}
-```
-
-Response:
-```json
-{
-  "success": true,
-  "flow_state": "in_flow",
-  "confidence": 0.85,
-  "face_data": {...},
-  "gesture_data": {...},
-  "rppg_data": {...}
-}
-```
-
-## Features
-
-- ✅ Real-time webcam feed
-- ✅ Live face detection
-- ✅ Gesture recognition for hand movements
-- ✅ Non-contact vital signs monitoring (rPPG)
-- ✅ Multi-modal fusion for accurate flow state detection
-- ✅ Interactive React UI with real-time results
-- ✅ REST API with FastAPI
-- ✅ Comprehensive testing suite
-
-## Technology Stack
-
-### Frontend
-- **React 18** - UI framework
-- **Axios** - HTTP client
-- **CSS3** - Styling
-
-### Backend
-- **FastAPI** - Web framework
-- **Uvicorn** - ASGI server
-- **Pydantic** - Data validation
-
-### AI/ML
-- **OpenCV** - Computer vision
-- **TensorFlow/PyTorch** - Deep learning
-- **MediaPipe** - Gesture recognition
-- **NumPy/SciPy** - Numerical computing
-- **scikit-learn** - ML utilities
-
-## Configuration
-
-### Backend Configuration
-Edit `backend/app/config/settings.py`:
-- `HOST` - Server host (default: 0.0.0.0)
-- `PORT` - Server port (default: 8000)
-- `DEBUG` - Debug mode (default: True)
-- `CORS_ORIGINS` - Allowed origins for CORS
-
-### Frontend Configuration
-Edit `frontend/.env`:
-- `REACT_APP_API_URL` - Backend API URL (default: http://localhost:8000)
-
-## Testing
-
-Run tests:
-```bash
-pytest
-```
-
-Run specific test file:
-```bash
-pytest tests/test_face.py -v
-```
-
-With coverage:
-```bash
-pytest --cov=ai_modules
-```
-
-## Development Workflow
-
-1. Create a new branch for your feature
-2. Make changes to relevant modules
-3. Run tests to ensure functionality
-4. Commit with descriptive messages
-5. Submit a pull request
-
-## Project Structure Explanation
-
-- **frontend/** - React application for user interaction
-- **backend/** - FastAPI server handling requests
-- **ai_modules/** - Core ML/AI processing logic
-- **tests/** - Unit tests for AI modules
-- **data/** - Optional datasets storage
-- **docs/** - Project documentation
-
-## Contributing
-
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Test thoroughly
-4. Submit a pull request with detailed description
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Authors
-
-- **Sameen Umar** - Project Lead
-
-## Acknowledgments
-
-- Computer vision: OpenCV
-- Deep learning: TensorFlow, PyTorch
-- Gesture recognition: MediaPipe
-- Web framework: FastAPI
-
-## Contact
-
-For questions or suggestions, open an issue or contact the maintainers.
-
----
-
-**Last Updated**: April 2026
+@app.get("/latest")
+async def latest():
+    if ai_manager.latest_payload is None:
+        return {"status": "no_data", "message": "AI module has not sent data yet"}
+    
+    # Warn frontend if data is stale (AI module likely disconnected)
+    age = time.time() - ai_manager.latest_payload.get("timestamp", 0)
+    if age > 5:
+        return {
+            "status":  "stale",
+            "age_seconds": round(age, 1),
+            "message": "AI module may be disconnected",
+            "data":    ai_manager.latest_payload,
+        }
+    
+    return ai_manager.latest_payload
