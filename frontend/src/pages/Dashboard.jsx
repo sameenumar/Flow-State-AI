@@ -10,12 +10,12 @@
  * they just render whatever they receive.
  *
  * Layout:
- *   ┌─────────────────┬──────────────────┐
- *   │   VIDEO FEED    │   STATE PANEL    │
- *   │                 │                  │
- *   ├────────┬────────┴──────────────────┤
- *   │ VITALS │   FACE   │   GESTURE      │
- *   └────────┴──────────┴────────────────┘
+ *   ┌──────────────┬───────────┬──────────┐
+ *   │  VIDEO FEED  │  STATE    │  FACE    │
+ *   │              │           │  EMOTION │
+ *   ├──────────────┴───────────┼──────────┤
+ *   │  VITALS (spans 2 cols)   │ GESTURE  │
+ *   └──────────────────────────┴──────────┘
  */
 
 import React from 'react';
@@ -75,13 +75,14 @@ export default function Dashboard() {
           <StatePanel fusion={data?.fusion} decision={data?.decision} />
         </div>
 
+        {/* Row 1 col 3 */}
+        <div className="grid-face">
+          <FacePanel face={data?.face} />
+        </div>
+
         {/* Row 2 */}
         <div className="grid-vitals">
           <VitalsPanel vitals={data?.vitals} history={history} />
-        </div>
-
-        <div className="grid-face">
-          <FacePanel face={data?.face} />
         </div>
 
         <div className="grid-gesture">

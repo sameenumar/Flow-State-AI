@@ -29,7 +29,7 @@ function PulseCanvas({ history }) {
     ctx.clearRect(0, 0, W, H);
 
     // Grid lines
-    ctx.strokeStyle = 'rgba(0,245,160,0.07)';
+    ctx.strokeStyle = 'rgba(232,53,26,0.1)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
       const y = (H / 4) * i;
@@ -43,10 +43,10 @@ function PulseCanvas({ history }) {
 
     const xStep = W / (history.length - 1);
 
-    // Glow effect — draw line twice, wider then sharp
-    [{ width: 4, alpha: 0.2 }, { width: 1.5, alpha: 1 }].forEach(({ width, alpha }) => {
+    // Draw line twice: wide+dim then sharp
+    [{ width: 4, alpha: 0.15 }, { width: 1.5, alpha: 1 }].forEach(({ width, alpha }) => {
       ctx.beginPath();
-      ctx.strokeStyle = `rgba(0,245,160,${alpha})`;
+      ctx.strokeStyle = `rgba(232,53,26,${alpha})`;
       ctx.lineWidth = width;
       ctx.lineJoin = 'round';
       ctx.lineCap  = 'round';
@@ -65,9 +65,9 @@ function PulseCanvas({ history }) {
     const dotY = H - ((lastVal - min) / range) * (H * 0.8) - H * 0.1;
     ctx.beginPath();
     ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
-    ctx.fillStyle = '#00f5a0';
-    ctx.shadowColor = '#00f5a0';
-    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#E8351A';
+    ctx.shadowColor = '#E8351A';
+    ctx.shadowBlur = 8;
     ctx.fill();
     ctx.shadowBlur = 0;
 
